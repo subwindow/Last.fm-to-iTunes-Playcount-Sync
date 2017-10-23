@@ -15,7 +15,6 @@ h2. Prerequisites
 OS X 10.5
 Nokogiri Gem (gem install nokogiri)
 Applescript Gem (gem install rb-scpt)
-Optparse Gem (gem install optparse)
 
 h3. Usage
 

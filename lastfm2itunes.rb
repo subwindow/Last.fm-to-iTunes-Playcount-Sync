@@ -9,7 +9,7 @@ require 'open-uri'
 require 'nokogiri' rescue "This script depends on the Nokogiri gem. Please run '(sudo) gem install nokogiri'."
 require 'rb-scpt' rescue "This script depends on the rb-scpt gem. Please run '(sudo) gem install rb-scpt'."
 include Appscript
-require 'optparse' rescue "This script depends on the optparse gem. Please run '(sudo) gem install optparse'."
+require 'optparse'
 
 Options = Struct.new(:username,:period,:maxplaycount,:addpc,:dryrun,:verbose)
 
