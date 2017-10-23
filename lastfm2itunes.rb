@@ -7,7 +7,7 @@
 
 require 'open-uri'
 require 'nokogiri' rescue "This script depends on the Nokogiri gem. Please run '(sudo) gem install nokogiri'."
-require 'rb-scpt' rescue "This script depends on the rb-scpt gem. Please run '(sudo) gem install rb-scpt'."
+require 'rb-scpt' rescue "This script depends on the Applescript rb-scpt gem. Please run '(sudo) gem install rb-scpt'."
 include Appscript
 require 'optparse'
 
