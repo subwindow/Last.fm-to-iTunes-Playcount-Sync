@@ -47,9 +47,9 @@ class Fetcher
       puts "No cached playcount data, grabbing fresh data from Last.fm"
       playcounts = {}
 
-      nowTime = Time.now
+      now_time = Time.now
       if period != "overall"
-        startTime = nowTime - (period.to_i * 7 * 24 * 60 * 60)
+        start_time = now_time - (period.to_i * 7 * 24 * 60 * 60)
       end
 
       puts "Fetching #{list_url}" if verbose
@@ -61,8 +61,8 @@ class Fetcher
         from = chartinfo['from']
         to = chartinfo['to']
         time = Time.at(from.to_i)
-        timeTo = Time.at(to.to_i)
-        if period == "overall" || timeTo >= startTime
+        time_to = Time.at(to.to_i)
+        if period == "overall" || time_to >= start_time
           puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
           sleep 0.1
           begin
@@ -129,11 +129,14 @@ class Syncer
 
         playcount = artist[Util.filter_name(track.name.get)]
         if playcount.nil?
-          puts "Couldn't match up #{track.artist.get} - #{track.name.get}" if verbose
+          if verbose
+            puts "Couldn't match up #{track.artist.get} - #{track.name.get}"
+          end
+
           next
         end
 
-        itunes_playcount = track.played_count.get
+        itunes_playcount = track.played_count.get || 0
 
         if addpc
           new_itunes_playcount = playcount + itunes_playcount
@@ -177,7 +180,7 @@ if $0 == __FILE__
     opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') do |m|
       syncer.max_play_count = m.to_i
     end
-    opts.on('-a', '--addpc', 'Add to playcount') do |a|
+    opts.on('-a', '--addpc', 'Add to playcount instead of replace') do |a|
       syncer.addpc = a
     end
     opts.on('-d', '--dry-run', 'Run without actually updating itunes') do |d|
