@@ -33,3 +33,5 @@ h3. Usage
 It'll tell you what it is doing while it is running. It'll cache the listening data as a marshalled hash in case you need to re-run the script to fix naming issues, or if you just want to play around with the listening data, which is easy: Marshal.load(File.read("cached_lastfm_data.rbmarshal"))
 
 Note: Tested with ruby 2.4.2 and updated Last.fm API on OSX 10.12.6
+
+As always, if you find any bugs: fork, fix and send a pull request.
