@@ -24,7 +24,7 @@ h3. Usage
     # Example:
     ruby lastfm2itunes.rb -u praetorian42
 
-    See help for all options:
+    # See help for all options:
     ruby lastfm2itunes.rb -h
   </code>
 </pre>
