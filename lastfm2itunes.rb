@@ -4,12 +4,33 @@
 #  The utility only updates tracks for which the last.fm play count is greater than the iTunes play count.
 # Because of how cool the AppleScript hooks are, watch your iTunes libary as this script works!
 
-username = ARGV.first
 
 require 'open-uri'
 require 'nokogiri' rescue "This script depends on the Nokogiri gem. Please run '(sudo) gem install nokogiri'."
-require 'appscript' rescue "This script depends on the rb-appscript gem. Please run '(sudo) gem install rb-appscript'."
+require 'rb-scpt' rescue "This script depends on the rb-scpt gem. Please run '(sudo) gem install rb-scpt'."
 include Appscript
+require 'optparse'
+
+options = {}
+OptionParser.new { |opts|
+  opts.banner = "Usage: lastfm2itunes.rb [options]"
+  opts.on('-u', '--username USERNAME', 'The Last.fm username') { |o| options[:username] = o }
+  opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') { |o| options[:maxplaycount] = o }
+  opts.on('-a', '--addpc', 'Add to playcount') { |o| options[:addpc] = o }
+  opts.on('-d', '--dry-run', 'Run without actually updating itunes') { |o| options[:dryrun] = o }
+  opts.on('-v', '--verbose', 'Be verbose') { |o| options[:verbose] = o }
+}.parse!
+
+#p options
+#p ARGV
+
+username = options[:username]
+addpc = options[:addpc] == true
+verbose = options[:verbose] == true
+dryrun = options[:dryrun] == true
+max_playcount = options[:maxplaycount].to_i
+
+puts "Running with #{options}"
 
 def filter_name(name)
   name.force_encoding("utf-8")
@@ -39,14 +60,14 @@ rescue
   puts "No cached playcount data, grabbing fresh data from Last.fm"
   playcounts = {}
 
-  Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/user/#{username}/weeklychartlist.xml")).search('weeklychartlist').search('chart').each do |chartinfo|
+  Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklychartlist&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5")).search('weeklychartlist').search('chart').each do |chartinfo|
     from = chartinfo['from']
     to = chartinfo['to']
     time = Time.at(from.to_i)
     puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
     sleep 0.1
     begin
-      Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/user/#{username}/weeklytrackchart.xml?from=#{from}&to=#{to}")).search('weeklytrackchart').search('track').each do |track|
+      Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5&from=#{from}&to=#{to}")).search('weeklytrackchart').search('track').each do |track|
         artist = filter_name(track.search('artist').first.content)
         name = filter_name(track.search('name').first.content)
         playcounts[artist] ||= {}
@@ -69,21 +90,31 @@ iTunes.tracks.get.each do |track|
   begin
     artist = playcounts[filter_name(track.artist.get)]
     if artist.nil?
-      puts "Couldn't match up #{track.artist.get}"
+      puts "Couldn't match up #{track.artist.get}" if verbose
       next
     end
 
     playcount = artist[filter_name(track.name.get)]
     if playcount.nil?
-      puts "Couldn't match up #{track.artist.get} - #{track.name.get}"
+      puts "Couldn't match up #{track.artist.get} - #{track.name.get}" if verbose
       next
     end
 
-    if playcount > track.played_count.get
-      puts "Setting #{track.artist.get} - #{track.name.get} to playcount of #{playcount} from playcount of #{track.played_count.get}"
-      track.played_count.set(playcount)
+    itunes_playcount = track.played_count.get
+
+    if addpc
+      new_itunes_playcount = playcount + itunes_playcount
+    elsif playcount > itunes_playcount
+      new_itunes_playcount = playcount
+    end
+
+    if new_itunes_playcount.nil? 
+      puts "Skipping #{track.artist.get} - #{track.name.get}, new playcount to small" if verbose
+    elsif (!max_playcount.nil? and new_itunes_playcount > max_playcount)
+      puts "Skipping #{track.artist.get} - #{track.name.get}, new playcount #{new_itunes_playcount} > max #{max_playcount}" if verbose
     else
-      puts "Track #{track.artist.get} - #{track.name.get} is chill at playcount of #{playcount}"
+      puts "Setting #{track.artist.get} - #{track.name.get} playcount from #{itunes_playcount} -> #{new_itunes_playcount}"
+      track.played_count.set(new_itunes_playcount) if !dryrun
     end
   rescue
     puts "Encountered some kind of error on this track"
