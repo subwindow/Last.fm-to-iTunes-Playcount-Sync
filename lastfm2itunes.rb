@@ -11,15 +11,21 @@ require 'rb-scpt' rescue "This script depends on the rb-scpt gem. Please run '(s
 include Appscript
 require 'optparse' rescue "This script depends on the optparse gem. Please run '(sudo) gem install optparse'."
 
-Options = Struct.new(:username,:maxplaycount,:addpc,:dryrun,:verbose)
+Options = Struct.new(:username,:period,:maxplaycount,:addpc,:dryrun,:verbose)
 
 class Parser
   def self.parse(options)
     args = Options.new()
 
+    args.period = "overall"
+    args.addpc = false
+    args.verbose = false
+    args.dryrun = false
+
     opt_parser = OptionParser.new do |opts|
       opts.banner = "Usage: lastfm2itunes.rb [options]"
       opts.on('-u', '--username USERNAME', 'The Last.fm username') { |o| args.username = o }
+      opts.on('-p', '--period DAYS', 'Only fetch last.fm playcounts of the last DAYS days') { |o| args.period = o }
       opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') { |o| args.maxplaycount = o }
       opts.on('-a', '--addpc', 'Add to playcount') { |o| args.addpc = o }
       opts.on('-d', '--dry-run', 'Run without actually updating itunes') { |o| args.dryrun = o }
@@ -41,9 +47,10 @@ options = Parser.parse(ARGV)
 #p ARGV
 
 username = options[:username]
-addpc = options[:addpc] == true
-verbose = options[:verbose] == true
-dryrun = options[:dryrun] == true
+period = options[:period] 
+addpc = options[:addpc]
+verbose = options[:verbose]
+dryrun = options[:dryrun]
 max_playcount = options[:maxplaycount].to_i
 
 if username.nil? or username == ""
@@ -72,7 +79,7 @@ def filter_name(name)
   name.downcase.gsub(/^the /, "").gsub(/ the$/, "").gsub(/[^\w]/, "")
 end
 
-filename = "cached_lastfm_data.rbmarshal"
+filename = "cached_lastfm_data.#{period}.rbmarshal"
 begin
   playcounts = Marshal.load(File.read(filename))
 
@@ -81,22 +88,34 @@ rescue
   puts "No cached playcount data, grabbing fresh data from Last.fm"
   playcounts = {}
 
+  nowTime = Time.now
+  if period != "overall"
+    startTime = nowTime - (period.to_i * 24 * 60 * 60)
+  end
+
   Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklychartlist&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5")).search('weeklychartlist').search('chart').each do |chartinfo|
     from = chartinfo['from']
     to = chartinfo['to']
     time = Time.at(from.to_i)
-    puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
-    sleep 0.1
-    begin
-      Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5&from=#{from}&to=#{to}")).search('weeklytrackchart').search('track').each do |track|
-        artist = filter_name(track.search('artist').first.content)
-        name = filter_name(track.search('name').first.content)
-        playcounts[artist] ||= {}
-        playcounts[artist][name] ||= 0
-        playcounts[artist][name] += track.search('playcount').first.content.to_i
+    timeTo = Time.at(to.to_i) 
+    if period == "overall" || timeTo >= startTime
+      if !startTime.nil? && timeTo >= startTime && time < startTime
+        from = startTime.to_i
+        time = startTime
       end
-      rescue
-        puts "Error getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+      puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+      sleep 0.1
+      begin
+        Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5&from=#{from}&to=#{to}")).search('weeklytrackchart').search('track').each do |track|
+          artist = filter_name(track.search('artist').first.content)
+          name = filter_name(track.search('name').first.content)
+          playcounts[artist] ||= {}
+          playcounts[artist][name] ||= 0
+          playcounts[artist][name] += track.search('playcount').first.content.to_i
+        end
+        rescue
+          puts "Error getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+      end
     end
   end
 
