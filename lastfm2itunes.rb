@@ -28,9 +28,7 @@ class Fetcher
     :period,
     :verbose
 
-  def initialize(
-    username=nil, period="overall", verbose=false
-  )
+  def initialize(username=nil, period="overall", verbose=false)
     self.username = username
     self.period = period
     self.verbose = verbose
