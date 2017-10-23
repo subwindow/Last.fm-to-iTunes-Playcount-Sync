@@ -14,15 +14,18 @@ h2. Prerequisites
 
 OS X 10.5
 Nokogiri Gem (gem install nokogiri)
-Appscript Gem (gem install rb-appscript)
+Appscript Gem (gem install rb-scpt)
 
 h3. Usage
 
 <pre>
   <code>
-    ruby lastfm2itunes.rb (your Last.fm username) 
+    ruby lastfm2itunes.rb -u (your Last.fm username) 
     # Example:
-    ruby lastfm2itunes.rb praetorian42
+    ruby lastfm2itunes.rb -u praetorian42
+
+    See help for all options:
+    ruby lastfm2itunes.rb -h
   </code>
 </pre>
 

@@ -11,15 +11,31 @@ require 'rb-scpt' rescue "This script depends on the rb-scpt gem. Please run '(s
 include Appscript
 require 'optparse'
 
-options = {}
-OptionParser.new { |opts|
-  opts.banner = "Usage: lastfm2itunes.rb [options]"
-  opts.on('-u', '--username USERNAME', 'The Last.fm username') { |o| options[:username] = o }
-  opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') { |o| options[:maxplaycount] = o }
-  opts.on('-a', '--addpc', 'Add to playcount') { |o| options[:addpc] = o }
-  opts.on('-d', '--dry-run', 'Run without actually updating itunes') { |o| options[:dryrun] = o }
-  opts.on('-v', '--verbose', 'Be verbose') { |o| options[:verbose] = o }
-}.parse!
+Options = Struct.new(:username,:maxplaycount,:addpc,:dryrun,:verbose)
+
+class Parser
+  def self.parse(options)
+    args = Options.new()
+
+    opt_parser = OptionParser.new do |opts|
+      opts.banner = "Usage: lastfm2itunes.rb [options]"
+      opts.on('-u', '--username USERNAME', 'The Last.fm username') { |o| args.username = o }
+      opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') { |o| args.maxplaycount = o }
+      opts.on('-a', '--addpc', 'Add to playcount') { |o| args.addpc = o }
+      opts.on('-d', '--dry-run', 'Run without actually updating itunes') { |o| args.dryrun = o }
+      opts.on('-v', '--verbose', 'Be verbose') { |o| args.verbose = o }
+      opts.on("-h", "--help", "Prints this help") do
+        puts opts
+        exit
+      end
+    end
+
+    opt_parser.parse!(options)
+    return args
+  end
+end
+
+options = Parser.parse(ARGV)
 
 #p options
 #p ARGV
@@ -29,6 +45,11 @@ addpc = options[:addpc] == true
 verbose = options[:verbose] == true
 dryrun = options[:dryrun] == true
 max_playcount = options[:maxplaycount].to_i
+
+if username.nil? or username == ""
+  Parser.parse %w[--help]
+  exit
+end
 
 puts "Running with #{options}"
 
