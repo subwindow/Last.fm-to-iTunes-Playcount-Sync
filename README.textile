@@ -2,7 +2,7 @@ h1. Last.fm to iTunes Play Count Sync
 
 h2. About
 
-This is a simple, stupid script to sync your playcount data from Last.fm to iTunes.
+This is a simple script to sync your playcount data from Last.fm to iTunes.
 
 Say you've moved to a new laptop and didn't move your iTunes Library data over. Or, you've had to rebuild your iTunes library and lost your play count data. If you're anal retentive like me or use crazy smart playlists like me, not having correct play count data is pretty annoying.
 
@@ -14,20 +14,28 @@ h2. Prerequisites
 
 OS X 10.5
 Nokogiri Gem (gem install nokogiri)
-Appscript Gem (gem install rb-appscript)
+Applescript Gem (gem install rb-scpt)
 
 h3. Usage
 
 <pre>
   <code>
-    ruby lastfm2itunes.rb (your Last.fm username) 
+    ruby lastfm2itunes.rb -u (your Last.fm username) 
     # Example:
-    ruby lastfm2itunes.rb praetorian42
+    ruby lastfm2itunes.rb -u praetorian42
+
+    # Example with dry run and add playcounts of the last 4 weeks:
+    ruby lastfm2itunes.rb -u praetorian42 -d -ap 4
+
+    # See help for all options:
+    ruby lastfm2itunes.rb -h
   </code>
 </pre>
 
 It'll tell you what it is doing while it is running. It'll cache the listening data as a marshalled hash in case you need to re-run the script to fix naming issues, or if you just want to play around with the listening data, which is easy: Marshal.load(File.read("cached_lastfm_data.rbmarshal"))
 
-Note: I've only used this script in Ruby 1.9.1. I don't see any reason why it wouldn't work in 1.8, but let me know about any incompatibilities.
+Note: Tested with ruby 2.4.2 and updated Last.fm API on OSX 10.12.6
+
+Note: Make sure to delete the cache files (*.rbmarshal) when you want to update with fresh data.
 
 As always, if you find any bugs: fork, fix and send a pull request.
