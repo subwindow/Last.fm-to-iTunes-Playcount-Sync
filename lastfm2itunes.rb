@@ -25,7 +25,7 @@ class Parser
     opt_parser = OptionParser.new do |opts|
       opts.banner = "Usage: lastfm2itunes.rb [options]"
       opts.on('-u', '--username USERNAME', 'The Last.fm username') { |o| args.username = o }
-      opts.on('-p', '--period DAYS', 'Only fetch last.fm playcounts of the last DAYS days') { |o| args.period = o }
+      opts.on('-p', '--period WEEKS', 'Only fetch last.fm playcounts of the last WEEKS weeks') { |o| args.period = o }
       opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') { |o| args.maxplaycount = o }
       opts.on('-a', '--addpc', 'Add to playcount') { |o| args.addpc = o }
       opts.on('-d', '--dry-run', 'Run without actually updating itunes') { |o| args.dryrun = o }
@@ -90,7 +90,7 @@ rescue
 
   nowTime = Time.now
   if period != "overall"
-    startTime = nowTime - (period.to_i * 24 * 60 * 60)
+    startTime = nowTime - (period.to_i * 7 * 24 * 60 * 60)
   end
 
   Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklychartlist&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5")).search('weeklychartlist').search('chart').each do |chartinfo|
@@ -99,11 +99,8 @@ rescue
     time = Time.at(from.to_i)
     timeTo = Time.at(to.to_i) 
     if period == "overall" || timeTo >= startTime
-      if !startTime.nil? && timeTo >= startTime && time < startTime
-        from = startTime.to_i
-        time = startTime
-      end
       puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+      # puts "http://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5&from=#{from}&to=#{to}"
       sleep 0.1
       begin
         Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5&from=#{from}&to=#{to}")).search('weeklytrackchart').search('track').each do |track|
