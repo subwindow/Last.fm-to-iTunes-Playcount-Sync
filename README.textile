@@ -25,8 +25,8 @@ h3. Usage
     # Example:
     ruby lastfm2itunes.rb -u praetorian42
 
-    # Example with dry run and limitted to playcounts of the last 4 weeks:
-    ruby lastfm2itunes.rb -u praetorian42 -d -p 4
+    # Example with dry run and add playcounts of the last 4 weeks:
+    ruby lastfm2itunes.rb -u praetorian42 -d -ap 4
 
     # See help for all options:
     ruby lastfm2itunes.rb -h
