@@ -130,7 +130,7 @@ iTunes.tracks.get.each do |track|
     end
 
     if new_itunes_playcount.nil? 
-      puts "Skipping #{track.artist.get} - #{track.name.get}, new playcount to small" if verbose
+      puts "Skipping #{track.artist.get} - #{track.name.get}, new playcount smaller than existing" if verbose
     elsif (!max_playcount.nil? and new_itunes_playcount > max_playcount)
       puts "Skipping #{track.artist.get} - #{track.name.get}, new playcount #{new_itunes_playcount} > max #{max_playcount}" if verbose
     else
