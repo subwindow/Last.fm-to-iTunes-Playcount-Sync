@@ -12,8 +12,8 @@ Added bonus: Look at iTunes while the script is running and see the play counts 
 
 ## Prerequisites
 
-OS X >= 10.11
-Ruby ~2.x
+* OS X >= 10.11
+* Ruby ~2.x
 
 ## Usage
 
