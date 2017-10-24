@@ -4,156 +4,205 @@
 #  The utility only updates tracks for which the last.fm play count is greater than the iTunes play count.
 # Because of how cool the AppleScript hooks are, watch your iTunes libary as this script works!
 
-
 require 'open-uri'
-require 'nokogiri' rescue "This script depends on the Nokogiri gem. Please run '(sudo) gem install nokogiri'."
-require 'rb-scpt' rescue "This script depends on the Applescript rb-scpt gem. Please run '(sudo) gem install rb-scpt'."
-include Appscript
 require 'optparse'
+require 'nokogiri'
+require 'rb-scpt'
+require 'unidecoder'
 
-Options = Struct.new(:username,:period,:maxplaycount,:addpc,:dryrun,:verbose)
 
-class Parser
-  def self.parse(options)
-    args = Options.new()
+class Util
+  # Normalize artist names the best we can (For instance, "Bjork" vs "Björk",
+  # "The Beatles" vs "Beatles")
+  def self.filter_name(name)
+    name = name.force_encoding("utf-8").to_ascii
+    return name.downcase.gsub(/^the /, "").gsub(/ the$/, "").gsub(/[^\w]/, "")
+  end
+end
 
-    args.period = "overall"
-    args.addpc = false
-    args.verbose = false
-    args.dryrun = false
+class Fetcher
+  API_KEY = "97fbd8d870b557fa50abafaa179276f5"
+  API_URL = "http://ws.audioscrobbler.com/2.0/"
 
-    opt_parser = OptionParser.new do |opts|
-      opts.banner = "Usage: lastfm2itunes.rb [options]"
-      opts.on('-u', '--username USERNAME', 'The Last.fm username') { |o| args.username = o }
-      opts.on('-p', '--period WEEKS', 'Only fetch last.fm playcounts of the last WEEKS weeks') { |o| args.period = o }
-      opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') { |o| args.maxplaycount = o }
-      opts.on('-a', '--addpc', 'Add to playcount') { |o| args.addpc = o }
-      opts.on('-d', '--dry-run', 'Run without actually updating itunes') { |o| args.dryrun = o }
-      opts.on('-v', '--verbose', 'Be verbose') { |o| args.verbose = o }
-      opts.on("-h", "--help", "Prints this help") do
-        puts opts
-        exit
+  attr_accessor :username,
+    :period,
+    :verbose
+
+  def initialize(username=nil, period="overall", verbose=false)
+    self.username = username
+    self.period = period
+    self.verbose = verbose
+  end
+
+  # Fetch last.fm play count data
+  def fetch
+    puts "No username given" and return unless username
+
+    filename = "cached_lastfm_data.#{period}.rbmarshal"
+    begin
+      playcounts = Marshal.load(File.read(filename))
+
+      puts "Reading cached playcount data from disk"
+    rescue
+      puts "No cached playcount data, grabbing fresh data from Last.fm"
+      playcounts = {}
+
+      now_time = Time.now
+      if period != "overall"
+        start_time = now_time - (period.to_i * 7 * 24 * 60 * 60)
       end
-    end
 
-    opt_parser.parse!(options)
-    return args
-  end
-end
+      puts "Fetching #{list_url}" if verbose
+      charts = Nokogiri::HTML(open(list_url)).
+        search('weeklychartlist').
+        search('chart')
 
-options = Parser.parse(ARGV)
+      charts.each do |chartinfo|
+        from = chartinfo['from']
+        to = chartinfo['to']
+        time = Time.at(from.to_i)
+        time_to = Time.at(to.to_i)
+        if period == "overall" || time_to >= start_time
+          puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+          sleep 0.1
+          begin
+            chart_url = chart_url(from, to)
+            puts "Fetching #{chart_url}" if verbose
+            tracks = Nokogiri::HTML(open(chart_url)).
+              search('weeklytrackchart').
+              search('track')
 
-#p options
-#p ARGV
-
-username = options[:username]
-period = options[:period] 
-addpc = options[:addpc]
-verbose = options[:verbose]
-dryrun = options[:dryrun]
-max_playcount = options[:maxplaycount].to_i
-
-if username.nil? or username == ""
-  Parser.parse %w[--help]
-  exit
-end
-
-puts "Running with #{options}"
-
-def filter_name(name)
-  name.force_encoding("utf-8")
-  # This is a hack until I can find out how to do true Unicode normalization in Ruby 1.9
-  #  (The Unicode gem doesn't work in 1.9, String#chars.normalize is gone. WTF to do?)
-  #  Credit for this goes to my coworker Jordi Bunster
-  {
-    ['á','à','â','ä','Ä','Â','À','Á','ã','Ã'] => 'a',
-    ['é','è','ê','ë','Ë','Ê','È','É']         => 'e',
-    ['í','ì','î','ï','Ï','Î','Ì','Í']         => 'i',
-    ['ó','ò','ô','ö','Ö','Ô','Ò','Ó','õ','Õ'] => 'o',
-    ['ú','ù','û','ü','Ü','Û','Ù','Ú']         => 'u',
-    ['ñ','Ñ']                                 => 'n',
-    ['ç','Ç']                                 => 'c',
-  }.each do |family, replacement|
-    family.each { |accent| name.gsub!(accent, replacement) }
-  end
-  name.downcase.gsub(/^the /, "").gsub(/ the$/, "").gsub(/[^\w]/, "")
-end
-
-filename = "cached_lastfm_data.#{period}.rbmarshal"
-begin
-  playcounts = Marshal.load(File.read(filename))
-
-  puts "Reading cached playcount data from disk"
-rescue
-  puts "No cached playcount data, grabbing fresh data from Last.fm"
-  playcounts = {}
-
-  nowTime = Time.now
-  if period != "overall"
-    startTime = nowTime - (period.to_i * 7 * 24 * 60 * 60)
-  end
-
-  Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklychartlist&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5")).search('weeklychartlist').search('chart').each do |chartinfo|
-    from = chartinfo['from']
-    to = chartinfo['to']
-    time = Time.at(from.to_i)
-    timeTo = Time.at(to.to_i) 
-    if period == "overall" || timeTo >= startTime
-      puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
-      # puts "http://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5&from=#{from}&to=#{to}"
-      sleep 0.1
-      begin
-        Nokogiri::HTML(open("http://ws.audioscrobbler.com/2.0/?method=user.getweeklytrackchart&user=#{username}&api_key=97fbd8d870b557fa50abafaa179276f5&from=#{from}&to=#{to}")).search('weeklytrackchart').search('track').each do |track|
-          artist = filter_name(track.search('artist').first.content)
-          name = filter_name(track.search('name').first.content)
-          playcounts[artist] ||= {}
-          playcounts[artist][name] ||= 0
-          playcounts[artist][name] += track.search('playcount').first.content.to_i
+            tracks.each do |track|
+              artist = Util.filter_name(track.search('artist').first.content)
+              name = Util.filter_name(track.search('name').first.content)
+              playcounts[artist] ||= {}
+              playcounts[artist][name] ||= 0
+              playcounts[artist][name] += track.search('playcount').first.content.to_i
+            end
+          rescue
+            puts "Error getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+          end
         end
-        rescue
-          puts "Error getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+      end
+
+      puts "Saving playcount data"
+      File.open(filename, "w+") do |file|
+        file.puts(Marshal.dump(playcounts))
       end
     end
+
+    return playcounts
   end
 
-  puts "Saving playcount data"
-  File.open(filename, "w+") do |file|
-    file.puts(Marshal.dump(playcounts))
+  def chart_url(from, to)
+    "#{API_URL}?method=user.getweeklytrackchart&user=#{username}&api_key=#{API_KEY}&from=#{from}&to=#{to}"
+  end
+
+  def list_url
+    "#{API_URL}?method=user.getweeklychartlist&user=#{username}&api_key=#{API_KEY}"
   end
 end
 
-iTunes = app('iTunes')
-iTunes.tracks.get.each do |track|
-  begin
-    artist = playcounts[filter_name(track.artist.get)]
-    if artist.nil?
-      puts "Couldn't match up #{track.artist.get}" if verbose
-      next
-    end
+class Syncer
+  attr_accessor :addpc,
+    :dry_run,
+    :max_play_count,
+    :verbose
 
-    playcount = artist[filter_name(track.name.get)]
-    if playcount.nil?
-      puts "Couldn't match up #{track.artist.get} - #{track.name.get}" if verbose
-      next
-    end
-
-    itunes_playcount = track.played_count.get
-
-    if addpc
-      new_itunes_playcount = playcount + itunes_playcount
-    elsif playcount > itunes_playcount
-      new_itunes_playcount = playcount
-    end
-
-    if new_itunes_playcount.nil? 
-      puts "Skipping #{track.artist.get} - #{track.name.get}, new playcount smaller than existing" if verbose
-    elsif (max_playcount > 0 and new_itunes_playcount > max_playcount)
-      puts "Skipping #{track.artist.get} - #{track.name.get}, new playcount #{new_itunes_playcount} > max #{max_playcount}" if verbose
-    else
-      puts "Setting #{track.artist.get} - #{track.name.get} playcount from #{itunes_playcount} -> #{new_itunes_playcount}"
-      track.played_count.set(new_itunes_playcount) if !dryrun
-    end
-  rescue
-    puts "Encountered some kind of error on this track"
+  def initialize(max_play_count=1000, addpc=false, dyrun=false, verbose=false)
+    self.addpc = addpc
+    self.dry_run = dry_run
+    self.verbose = verbose
+    self.max_play_count = max_play_count
   end
+
+  # Sync play count data to iTunes
+  def sync(playcounts)
+    iTunes = Appscript.app('iTunes')
+    iTunes.tracks.get.each do |track|
+      begin
+        artist = playcounts[Util.filter_name(track.artist.get)]
+        if artist.nil?
+          puts "Couldn't match up #{track.artist.get}" if verbose
+          next
+        end
+
+        playcount = artist[Util.filter_name(track.name.get)]
+        if playcount.nil?
+          if verbose
+            puts "Couldn't match up #{track.artist.get} - #{track.name.get}"
+          end
+
+          next
+        end
+
+        itunes_playcount = track.played_count.get || 0
+
+        if addpc
+          new_itunes_playcount = playcount + itunes_playcount
+        elsif playcount > itunes_playcount
+          new_itunes_playcount = playcount
+        end
+
+        if new_itunes_playcount.nil?
+          if verbose
+            puts "Skipping #{track.artist.get} - \"#{track.name.get}\", new playcount smaller than existing"
+          end
+        elsif (max_play_count > 0 && new_itunes_playcount > max_play_count) && verbose
+          if verbose
+            puts "Skipping #{track.artist.get} - \"#{track.name.get}\", new playcount #{new_itunes_playcount} > max #{max_play_count}"
+          end
+        else
+          if verbose
+            puts "Setting #{track.artist.get} - \"#{track.name.get}\" playcount from #{itunes_playcount} -> #{new_itunes_playcount}"
+          end
+          track.played_count.set(new_itunes_playcount) unless dry_run
+        end
+      rescue Exception => e
+        puts "Encountered some kind of error on this track: #{e}: #{e.message}"
+      end
+    end
+  end
+end
+
+if $0 == __FILE__
+  syncer = Syncer.new
+  fetcher = Fetcher.new
+
+  opt_parser = OptionParser.new do |opts|
+    opts.banner = "Usage: lastfm2itunes.rb [options]"
+    opts.on('-u', '--username USERNAME', 'The Last.fm username') do |u|
+      fetcher.username = u
+    end
+    opts.on('-p', '--period WEEKS', 'Only fetch last.fm playcounts of the last WEEKS weeks') do |p|
+      fetcher.period = p
+    end
+    opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') do |m|
+      syncer.max_play_count = m.to_i
+    end
+    opts.on('-a', '--addpc', 'Add to playcount instead of replace') do |a|
+      syncer.addpc = a
+    end
+    opts.on('-d', '--dry-run', 'Run without actually updating itunes') do |d|
+      syncer.dry_run = d
+    end
+    opts.on('-v', '--verbose', 'Be verbose') do |v|
+      syncer.verbose = v
+      fetcher.verbose = v
+    end
+    opts.on("-h", "--help", "Prints this help") do
+      puts opts
+      exit
+    end
+  end
+
+  opt_parser.parse!
+
+  if fetcher.username.nil? || fetcher.username == ""
+    opt_parser.parse! %w[--help]
+    exit
+  end
+
+  playcounts = fetcher.fetch
+  syncer.sync(playcounts)
 end
