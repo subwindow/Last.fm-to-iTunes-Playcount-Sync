@@ -158,6 +158,8 @@ class Syncer
           end
           track.played_count.set(new_itunes_playcount) unless dry_run
         end
+      rescue SystemExit, Interrupt
+        raise
       rescue Exception => e
         puts "Encountered some kind of error on this track: #{e}: #{e.message}"
       end
@@ -175,7 +177,12 @@ if $0 == __FILE__
       fetcher.username = u
     end
     opts.on('-p', '--period WEEKS', 'Only fetch last.fm playcounts of the last WEEKS weeks') do |p|
-      fetcher.period = p
+      if /\A\d+\z/.match(p)
+        fetcher.period = p
+      else
+        puts opts
+        exit
+      end
     end
     opts.on('-m', '--max-playcount MAX', 'Do not set new playcount if greater than MAX') do |m|
       syncer.max_play_count = m.to_i
