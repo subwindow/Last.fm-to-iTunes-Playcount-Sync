@@ -148,7 +148,7 @@ class Syncer
           if verbose
             puts "Skipping #{track.artist.get} - \"#{track.name.get}\", new playcount smaller than existing"
           end
-        elsif (max_play_count > 0 && new_itunes_playcount > max_play_count) && verbose
+        elsif (max_play_count > 0 && new_itunes_playcount > max_play_count)
           if verbose
             puts "Skipping #{track.artist.get} - \"#{track.name.get}\", new playcount #{new_itunes_playcount} > max #{max_play_count}"
           end
