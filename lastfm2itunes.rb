@@ -215,6 +215,11 @@ if $0 == __FILE__
 
   opt_parser.parse!
 
+  if fetcher.username.nil? || fetcher.username == ""
+    opt_parser.parse! %w[--help]
+    exit
+  end
+
   playcounts = fetcher.fetch
   syncer.sync(playcounts)
 end
