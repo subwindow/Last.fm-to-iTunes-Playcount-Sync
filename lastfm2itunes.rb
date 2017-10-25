@@ -109,7 +109,7 @@ class Syncer
     :max_play_count,
     :verbose
 
-  def initialize(max_play_count=1000, addpc=false, dyrun=false, verbose=false)
+  def initialize(max_play_count=1000, addpc=false, dry_run=false, verbose=false)
     self.addpc = addpc
     self.dry_run = dry_run
     self.verbose = verbose
