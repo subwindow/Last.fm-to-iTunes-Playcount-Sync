@@ -24,7 +24,7 @@ bundle exec ruby lastfm2itunes.rb -u (your Last.fm username)
 bundle exec ruby lastfm2itunes.rb -u praetorian42
 
 # Example with dry run and add playcounts of the last 4 weeks:
-bundle exec ruby lastfm2itunes.rb -u praetorian42 -d -a 4
+bundle exec ruby lastfm2itunes.rb -u praetorian42 -n -a -w 4
 
 # See help for all options:
 bundle exec ruby lastfm2itunes.rb -h
