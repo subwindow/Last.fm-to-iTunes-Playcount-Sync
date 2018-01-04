@@ -23,6 +23,7 @@ end
 class Fetcher
   API_KEY = "97fbd8d870b557fa50abafaa179276f5"
   API_URL = "http://ws.audioscrobbler.com/2.0/"
+  DAY = 24 * 60 * 60
 
   attr_accessor :username,
     :period,
@@ -47,43 +48,42 @@ class Fetcher
       puts "No cached playcount data, grabbing fresh data from Last.fm"
       playcounts = {}
 
-      now_time = Time.now
-      if period != "overall"
-        start_time = now_time - (period.to_i * 7 * 24 * 60 * 60)
-      end
+      from = nil
+      to = nil
 
-      puts "Fetching #{list_url}" if verbose
-      charts = Nokogiri::HTML(open(list_url)).
-        search('weeklychartlist').
-        search('chart')
+      if period == "overall"
+        # process all time
 
-      charts.each do |chartinfo|
-        from = chartinfo['from']
-        to = chartinfo['to']
-        time = Time.at(from.to_i)
-        time_to = Time.at(to.to_i)
-        if period == "overall" || time_to >= start_time
-          puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
-          sleep 0.1
-          begin
-            chart_url = chart_url(from, to)
-            puts "Fetching #{chart_url}" if verbose
-            tracks = Nokogiri::HTML(open(chart_url)).
-              search('weeklytrackchart').
-              search('track')
+        puts "Fetching #{list_url}" if verbose
+        charts = Nokogiri::HTML(open(list_url)).
+          search('weeklychartlist').
+          search('chart')
 
-            tracks.each do |track|
-              artist = Util.filter_name(track.search('artist').first.content)
-              name = Util.filter_name(track.search('name').first.content)
-              playcounts[artist] ||= {}
-              playcounts[artist][name] ||= 0
-              playcounts[artist][name] += track.search('playcount').first.content.to_i
-            end
-          rescue
-            puts "Error getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
-          end
+        charts.each do |chartinfo|
+          from = chartinfo['from']
+          to = chartinfo['to']
+          process(playcounts, from, to)
         end
+
+        # in any case process the current week too
+        if from.nil?
+          to = Time.now.to_i
+          from = to.to_i - WEEK
+        else
+          from = to
+          to = Time.now.to_i
+        end
+        process(playcounts, from, to)
+      
+      else
+        # process the given period of days
+
+        to = Time.now.to_i
+        from = to - period.to_i * DAY
+
+        process(playcounts, from, to)
       end
+      
 
       puts "Saving playcount data"
       File.open(filename, "w+") do |file|
@@ -92,6 +92,29 @@ class Fetcher
     end
 
     return playcounts
+  end
+
+  def process(playcounts, from, to)
+    time = Time.at(from.to_i)
+    puts "Getting listening data for week of #{time.year}-#{time.month}-#{time.day}"
+    sleep 0.1
+    begin
+      chart_url = chart_url(from, to)
+      puts "Fetching #{chart_url}" if verbose
+      tracks = Nokogiri::HTML(open(chart_url)).
+        search('weeklytrackchart').
+        search('track')
+
+      tracks.each do |track|
+        artist = Util.filter_name(track.search('artist').first.content)
+        name = Util.filter_name(track.search('name').first.content)
+        playcounts[artist] ||= {}
+        playcounts[artist][name] ||= 0
+        playcounts[artist][name] += track.search('playcount').first.content.to_i
+      end
+    rescue StandardError => e
+      puts "Error getting listening data for week of #{time.year}-#{time.month}-#{time.day} : #{e}"
+    end
   end
 
   def chart_url(from, to)
@@ -107,13 +130,15 @@ class Syncer
   attr_accessor :addpc,
     :dry_run,
     :max_play_count,
-    :verbose
+    :verbose,
+    :extra_verbose
 
-  def initialize(max_play_count=1000, addpc=false, dry_run=false, verbose=false)
+  def initialize(max_play_count=1000, addpc=false, dry_run=false, verbose=false, extra_verbose=false)
+    self.max_play_count = max_play_count
     self.addpc = addpc
     self.dry_run = dry_run
     self.verbose = verbose
-    self.max_play_count = max_play_count
+    self.extra_verbose = extra_verbose
   end
 
   # Sync play count data to iTunes
@@ -123,16 +148,17 @@ class Syncer
       begin
         artist = playcounts[Util.filter_name(track.artist.get)]
         if artist.nil?
-          puts "Couldn't match up #{track.artist.get}" if verbose
+          if extra_verbose
+            puts "Couldn't match up #{track.artist.get}" 
+          end
           next
         end
 
         playcount = artist[Util.filter_name(track.name.get)]
         if playcount.nil?
-          if verbose
+          if extra_verbose
             puts "Couldn't match up #{track.artist.get} - #{track.name.get}"
           end
-
           next
         end
 
@@ -181,9 +207,17 @@ if $0 == __FILE__
         exit
       end
     end
-    opts.on('-p', '--period WEEKS', 'Only fetch last.fm playcounts of the last WEEKS weeks') do |p|
-      if /\A\d+\z/.match(p)
-        fetcher.period = p
+    opts.on('-d', '--days DAYS', 'Only fetch last.fm playcounts of the last DAYS days') do |d|
+      if /\A\d+\z/.match(d)
+        fetcher.period = d.to_i
+      else
+        puts opts
+        exit
+      end
+    end
+    opts.on('-w', '--weeks WEEKS', 'Only fetch last.fm playcounts of the last WEEKS weeks') do |w|
+      if /\A\d+\z/.match(w)
+        fetcher.period = w.to_i * 7
       else
         puts opts
         exit
@@ -200,12 +234,17 @@ if $0 == __FILE__
     opts.on('-a', '--addpc', 'Add to playcount instead of replace') do |a|
       syncer.addpc = a
     end
-    opts.on('-d', '--dry-run', 'Run without actually updating itunes') do |d|
-      syncer.dry_run = d
+    opts.on('-n', '--dry-run', 'Run without actually updating itunes') do |n|
+      syncer.dry_run = n
     end
     opts.on('-v', '--verbose', 'Be verbose') do |v|
       syncer.verbose = v
       fetcher.verbose = v
+    end
+    opts.on('-e', '--extra-verbose', 'Be extra verbose') do |e|
+      syncer.extra_verbose = e
+      syncer.verbose = e
+      fetcher.verbose = e
     end
     opts.on("-h", "--help", "Prints this help") do
       puts opts

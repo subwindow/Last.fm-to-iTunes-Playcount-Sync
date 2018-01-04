@@ -13,7 +13,7 @@ Added bonus: Look at iTunes while the script is running and see the play counts 
 ## Prerequisites
 
 * OS X >= 10.11
-* Ruby ~2.x
+* Ruby >= 2.1.0
 
 ## Usage
 
@@ -24,7 +24,7 @@ bundle exec ruby lastfm2itunes.rb -u (your Last.fm username)
 bundle exec ruby lastfm2itunes.rb -u praetorian42
 
 # Example with dry run and add playcounts of the last 4 weeks:
-bundle exec ruby lastfm2itunes.rb -u praetorian42 -d -a 4
+bundle exec ruby lastfm2itunes.rb -u praetorian42 -n -a -w 4
 
 # See help for all options:
 bundle exec ruby lastfm2itunes.rb -h
